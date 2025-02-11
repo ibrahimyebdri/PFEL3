@@ -22,7 +22,7 @@ export default function Footer() {
                   clipRule="evenodd"
                 />
               </svg>
-              <span className="self-center text-2xl font-semibold whitespace-nowrap font-mono">TripDzAir</span>
+              <span className="self-center text-2xl font-semibold whitespace-nowrap font-mono uppercase">TripDzAir</span>
             </a>
           </div>
           <div className="grid grid-cols-2 gap-8 sm:gap-6 sm:grid-cols-3">

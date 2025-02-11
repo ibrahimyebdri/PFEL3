@@ -30,7 +30,7 @@ const Header = () => {
               clipRule="evenodd"
             />
           </svg>
-          <span className="self-center text-xl font-bold text-white tracking-wider font-mono">  {/* Reduced font size */}
+          <span className="self-center text-xl font-bold text-white tracking-wider font-mono uppercase">  {/* Reduced font size */}
             TripDzAir
           </span>
         </Link>
