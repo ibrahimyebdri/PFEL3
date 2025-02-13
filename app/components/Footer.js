@@ -36,10 +36,10 @@ export default function Footer() {
               </ul>
             </div>
             <div>
-              <h2 className="mb-6 text-sm font-semibold text-gray-300 uppercase">Follow Us</h2>
+              <h2 className="mb-6 text-sm font-semibold text-gray-300 uppercase">Je suis </h2>
               <ul className="font-medium">
-                <li className="mb-4"><a href="#" className="hover:underline">Github</a></li>
-                <li><a href="#" className="hover:underline">Discord</a></li>
+                <li className="mb-4"><a href="/AdminH" className="hover:underline">admin hotel </a></li>
+                <li><a href="#" className="hover:underline">guide touristique</a></li>
                 <li><a href="#" className="hover:underline">Instagram</a></li>
               </ul>
             </div>
