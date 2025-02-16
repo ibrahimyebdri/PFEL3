@@ -115,7 +115,7 @@ const Header = () => {
             </li>
             <li>
               <Link
-                href="/hotel"
+                href="/hotels"
                 className="block py-2 px-3 md:p-0 text-white hover:text-gray-100 dark:text-white dark:hover:bg-gray-700 relative group transition-colors duration-200"
               >
                 Hotels

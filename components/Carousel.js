@@ -95,12 +95,9 @@ export default function Carousel() {
         <div className="mt-4 flex justify-center">
           {dynamicPhrases[currentPhraseIndex].split("").map((char, i) => (
             <span
+              // On inclut currentPhraseIndex dans la clé pour forcer le re-mount à chaque changement
               key={`dynamic-${currentPhraseIndex}-${i}`}
-              className={`font-bold text-white ${
-                dynamicPhrases[currentPhraseIndex] === "ACTIVITÉ TOURISTIQUE"
-                  ? "sm:text-3xl text-3xl md:text-3xl lg:text-5xl" // Taille réduite pour les petits écrans
-                  : "sm:text-3xl text-4xl md:text-5xl lg:text-6xl" // Taille normale pour les autres phrases
-              }`}
+              className="font-bold text-white sm:text-3xl text-4xl md:text-5xl lg:text-6xl"
               style={{
                 animation: `fadeIn 0.5s ${i * 0.1}s forwards`,
                 textShadow: `0 0 10px ${getColor(i / (dynamicPhrases[currentPhraseIndex].length - 1))},
@@ -115,6 +112,8 @@ export default function Carousel() {
       </div>
 
       {/* Boutons de navigation */}
+      
+      
     </div>
   );
 }
