@@ -29,18 +29,28 @@ const HotelServiceCard = ({ service }) => {
   const [duration, setDuration] = useState(1); // Champ désactivé, toujours 1
   const [specialRequest, setSpecialRequest] = useState("");
 
-  // États pour la soumission
+  // États pour la soumission du formulaire de réservation
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionError, setSubmissionError] = useState(null);
   const [submissionSuccess, setSubmissionSuccess] = useState(null);
 
-  // État pour l'utilisateur
+  // État pour l'utilisateur connecté
   const [user, setUser] = useState(null);
+
+  // États pour le popup des commentaires
+  const [showReviewPopup, setShowReviewPopup] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submissionReviewLoading, setSubmissionReviewLoading] = useState(false);
+  const [submissionReviewError, setSubmissionReviewError] = useState(null);
+  const [submissionReviewSuccess, setSubmissionReviewSuccess] = useState(null);
 
   // Récupérer l'utilisateur via Supabase Auth
   useEffect(() => {
     async function fetchUser() {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUser(user);
         setFirstName(user.user_metadata.first_name || "");
@@ -75,7 +85,7 @@ const HotelServiceCard = ({ service }) => {
     }
 
     // Insérer la réservation dans la table reservations
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("reservations")
       .insert([
         {
@@ -95,6 +105,65 @@ const HotelServiceCard = ({ service }) => {
       window.location.hash = "";
     }
     setSubmissionLoading(false);
+  };
+
+  // Récupération des commentaires pour le service depuis Supabase en joignant la table users pour récupérer le prénom
+  const fetchReviews = async () => {
+    setLoadingReviews(true);
+    const { data, error } = await supabase
+      .from("reviews")
+      .select("*, users(first_name)")
+      .eq("review_type", "hotel_service")
+      .eq("review_type_id", id)
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("Erreur lors du chargement des commentaires:", error.message);
+    } else {
+      setReviews(data);
+    }
+    setLoadingReviews(false);
+  };
+
+  // Charger les commentaires dès l'ouverture du popup
+  useEffect(() => {
+    if (showReviewPopup) {
+      fetchReviews();
+    }
+  }, [showReviewPopup]);
+
+  // Gestion de l'ajout d'un commentaire
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    setSubmissionReviewLoading(true);
+    setSubmissionReviewError(null);
+    setSubmissionReviewSuccess(null);
+
+    if (!user) {
+      router.push("/auth");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("reviews")
+      .insert([
+        {
+          user_id: user.id,
+          review_type: "hotel_service",
+          review_type_id: id,
+          rating: Number(reviewRating),
+          comment: reviewComment,
+        },
+      ]);
+    if (error) {
+      setSubmissionReviewError("Erreur lors de l'ajout du commentaire: " + error.message);
+    } else {
+      setSubmissionReviewSuccess("Votre commentaire a été ajouté.");
+      setReviewRating(5);
+      setReviewComment("");
+      // Recharger les commentaires pour actualiser la liste
+      fetchReviews();
+    }
+    setSubmissionReviewLoading(false);
   };
 
   return (
@@ -188,41 +257,29 @@ const HotelServiceCard = ({ service }) => {
           {/* Boutons d'action */}
           <div className="mt-8 flex flex-col gap-3">
             {id ? (
-              <a
-                href={`#popup-reservation-service-${id}`}
-                onClick={(e) => {
-                  if (!user) {
-                    e.preventDefault();
-                    router.push("/auth");
-                  }
-                }}
-                className="flex items-center justify-center gap-2 rounded-xl border border-transparent bg-gradient-to-r from-green-600 to-green-500 px-4 py-3 text-white font-semibold transition-all hover:shadow-lg w-full"
-              >
-                Réserver service
-              </a>
+              <>
+                <a
+                  href={`#popup-reservation-service-${id}`}
+                  onClick={(e) => {
+                    if (!user) {
+                      e.preventDefault();
+                      router.push("/auth");
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-transparent bg-gradient-to-r from-green-600 to-green-500 px-4 py-3 text-white font-semibold transition-all hover:shadow-lg w-full"
+                >
+                  Réserver service
+                </a>
+                <button
+                  onClick={() => setShowReviewPopup(true)}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-green-500 px-4 py-3 text-green-500 transition-colors hover:bg-green-500/10 w-full"
+                >
+                  Voir commentaire
+                </button>
+              </>
             ) : (
               <span className="text-red-500">ID service non disponible</span>
             )}
-            <button className="flex items-center justify-center gap-2 rounded-xl border border-green-500 px-4 py-3 text-green-500 transition-colors hover:bg-green-500/10">
-              <svg
-                className="w-6 h-6 text-gray-800"
-                aria-hidden="true"
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M4 15v2a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-2M12 4v12m0-12l4 4m-4-4L8 8"
-                />
-              </svg>
-              Partager
-            </button>
           </div>
         </div>
       </div>
@@ -496,6 +553,93 @@ const HotelServiceCard = ({ service }) => {
               color: #333;
             }
           `}</style>
+        </div>
+      )}
+
+      {/* Popup des commentaires pour le service */}
+      {showReviewPopup && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full p-6 relative">
+            <button
+              onClick={() => setShowReviewPopup(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-2xl"
+            >
+              &times;
+            </button>
+            <h3 className="text-xl font-bold mb-4">Commentaires pour {service.name}</h3>
+            {loadingReviews ? (
+              <p>Chargement des commentaires...</p>
+            ) : (
+              <>
+                {reviews.length > 0 ? (
+                  <div className="mb-4 max-h-64 overflow-y-auto">
+                    {reviews.map((review) => (
+                      <div key={review.review_id} className="border-b border-gray-200 pb-2 mb-2">
+                        <p className="font-semibold">
+                          {review.users && review.users.first_name ? review.users.first_name : "Utilisateur"} : {review.rating} ★
+                        </p>
+                        <p>{review.comment}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(review.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>Aucun commentaire disponible.</p>
+                )}
+              </>
+            )}
+            <h4 className="text-lg font-semibold mb-2">Ajouter un commentaire</h4>
+            {user ? (
+              <>
+                {submissionReviewError && <p className="text-red-500 mb-2">{submissionReviewError}</p>}
+                {submissionReviewSuccess && <p className="text-green-500 mb-2">{submissionReviewSuccess}</p>}
+                <form onSubmit={handleReviewSubmit} className="flex flex-col gap-4">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor={`review_rating_${id}`} className="w-24">
+                      Note:
+                    </label>
+                    <select
+                      id={`review_rating_${id}`}
+                      value={reviewRating}
+                      onChange={(e) => setReviewRating(e.target.value)}
+                      className="border p-2 rounded"
+                    >
+                      {[1, 2, 3, 4, 5].map((num) => (
+                        <option key={num} value={num}>
+                          {num}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col">
+                    <label htmlFor={`review_comment_${id}`} className="mb-1">
+                      Commentaire:
+                    </label>
+                    <textarea
+                      id={`review_comment_${id}`}
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      className="border p-2 rounded"
+                      rows="3"
+                    ></textarea>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submissionReviewLoading}
+                    className="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition-colors"
+                  >
+                    {submissionReviewLoading ? "Envoi en cours..." : "Envoyer le commentaire"}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <p className="text-center text-gray-600">
+                Connectez-vous pour ajouter un commentaire.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

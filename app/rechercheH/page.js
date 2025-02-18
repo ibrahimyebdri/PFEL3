@@ -47,7 +47,7 @@ function RechercheHContent() {
             hotel_offer_id, price, name, description
           )
         `)
-        .ilike("location", `%${destination}%`);
+        .ilike("wilaya", `%${destination}%`);
       if (error) {
         setErrorOffers(error.message);
       } else {

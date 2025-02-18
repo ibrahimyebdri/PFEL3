@@ -10,16 +10,32 @@ import Footer from "@/components/Footer";
 const uploadImage = async (hotelName, file) => {
   const fileExt = file.name.split('.').pop();
   const fileName = `${hotelName}-${Date.now()}.${fileExt}`;
-  const filePath = fileName; // Vous pouvez organiser le chemin comme vous le souhaitez
+  const filePath = `hotels/${fileName}`; // Organiser les fichiers dans un dossier "hotels"
+
+  // Récupérer l'utilisateur connecté
+  const { data: user, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    console.error("Utilisateur non authentifié", authError?.message);
+    return null;
+  }
+
+  // Uploader l'image vers Supabase Storage
   const { data, error } = await supabase.storage
     .from('hotels-images')
-    .upload(filePath, file);
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+
   if (error) {
     console.error("Erreur lors de l'upload de l'image", error.message);
     return null;
   }
-  return data.path;
+
+  // Retourner l'URL complète de l'image
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/hotels-images/${filePath}`;
 };
+
 
 // Composant PopupMessage pour afficher les messages (succès ou échec)
 const PopupMessage = ({ message, onClose }) => (
