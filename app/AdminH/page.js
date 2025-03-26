@@ -8,10 +8,13 @@ import Footer from "@/components/Footer";
 
 // Composant pour afficher un message popup
 const PopupMessage = ({ message, onClose }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-white p-6 rounded-xl shadow-lg max-w-md">
-      <p className="text-lg mb-4">{message}</p>
-      <button onClick={onClose} className="bg-blue-500 text-white px-4 py-2 rounded">
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md">
+      <p className="text-2xl font-bold mb-6 text-gray-800">{message}</p>
+      <button
+        onClick={onClose}
+        className="bg-indigo-600 text-white px-6 py-3 rounded-full shadow-lg hover:bg-indigo-700 transition duration-300"
+      >
         OK
       </button>
     </div>
@@ -26,13 +29,37 @@ const AdminH = () => {
   const [hotels, setHotels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
 
-  // Pour modification d'une réservation
-  const [isReservationPopupOpen, setIsReservationPopupOpen] = useState(false);
-  const [editingReservation, setEditingReservation] = useState(null);
+  // Fonction pour charger les réservations avec la jointure sur users et le tri par date décroissante
+  const loadReservations = async () => {
+    if (offers.length === 0 && services.length === 0) return;
+    const { data: reservationsData, error: reservationsError } = await supabase
+      .from("reservations")
+      .select("*, user:users(first_name,last_name,phone_number)")
+      .in("reservation_type", ["hotel_offer", "hotel_service"]);
+    if (reservationsError) {
+      console.error("Erreur chargement réservations :", reservationsError);
+      return;
+    }
+    const offerIds = offers.map(o => o.hotel_offer_id);
+    const serviceIds = services.map(s => s.hotel_service_id);
+    const filteredReservations = reservationsData.filter(r => {
+      if (r.reservation_type === "hotel_offer") {
+        return offerIds.includes(r.reservation_type_id);
+      } else if (r.reservation_type === "hotel_service") {
+        return serviceIds.includes(r.reservation_type_id);
+      }
+      return false;
+    });
+    filteredReservations.sort((a, b) => {
+      const dateA = a.booking_date ? new Date(a.booking_date).getTime() : 0;
+      const dateB = b.booking_date ? new Date(b.booking_date).getTime() : 0;
+      return dateB - dateA;
+    });
+    setReservations(filteredReservations);
+  };
 
   // Récupération de l'utilisateur et de l'hôtel associé
   useEffect(() => {
@@ -42,19 +69,36 @@ const AdminH = () => {
         router.push("/auth");
         return;
       }
+  
+      // Vérification du rôle de l'utilisateur
+      const { data: userData, error: roleError } = await supabase
+        .from("users")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+  
+      if (roleError || !userData || userData.role !== "hotel_admin") {
+        setPopupMessage("Accès refusé : Vous n'avez pas les autorisations nécessaires.");
+        setShowPopup(true);
+        setLoading(false);
+        setTimeout(() => {
+          router.push("/"); // Redirige vers la page d'accueil après 2 secondes
+        }, 2000);
+        return;
+      }
+  
       setUser(user);
-
+  
       const { data: hotelData } = await supabase
         .from("hotels")
         .select("*")
         .eq("admin_id", user.id)
         .maybeSingle();
-
+  
       if (!hotelData) {
         setHotels([]);
         setPopupMessage("Aucun hôtel associé n'a été trouvé. Veuillez créer un hôtel.");
         setShowPopup(true);
-        // Ici, vous pourriez déclencher l'ouverture d'un formulaire de création d'hôtel
       } else {
         setHotels([hotelData]);
       }
@@ -62,384 +106,186 @@ const AdminH = () => {
     };
     fetchUserAndHotel();
   }, [router]);
-
   // Chargement des offres de l'hôtel
   useEffect(() => {
-    if (hotels.length > 0) {
+    const fetchOffers = async () => {
+      if (hotels.length === 0) return;
       const currentHotel = hotels[0];
-      const fetchOffers = async () => {
-        const { data: offersData, error: offersError } = await supabase
-          .from("hotel_offers")
-          .select("*")
-          .eq("hotel_id", currentHotel.hotel_id);
-        if (offersError) {
-          console.error("Erreur chargement offres :", offersError);
-        } else {
-          setOffers(offersData);
-        }
-      };
-      fetchOffers();
-    } else {
-      setOffers([]);
-    }
+      const { data: offersData, error: offersError } = await supabase
+        .from("hotel_offers")
+        .select("*")
+        .eq("hotel_id", currentHotel.hotel_id);
+      if (offersError) {
+        console.error("Erreur chargement offres :", offersError);
+      } else {
+        setOffers(offersData);
+      }
+    };
+    fetchOffers();
   }, [hotels]);
 
   // Chargement des services de l'hôtel
   useEffect(() => {
-    if (hotels.length > 0) {
+    const fetchServices = async () => {
+      if (hotels.length === 0) return;
       const currentHotel = hotels[0];
-      const fetchServices = async () => {
-        const { data: servicesData, error: servicesError } = await supabase
-          .from("hotel_services")
-          .select("*")
-          .eq("hotel_id", currentHotel.hotel_id);
-        if (servicesError) {
-          console.error("Erreur chargement services :", servicesError);
-        } else {
-          setServices(servicesData);
-        }
-      };
-      fetchServices();
-    } else {
-      setServices([]);
-    }
+      const { data: servicesData, error: servicesError } = await supabase
+        .from("hotel_services")
+        .select("*")
+        .eq("hotel_id", currentHotel.hotel_id);
+      if (servicesError) {
+        console.error("Erreur chargement services :", servicesError);
+      } else {
+        setServices(servicesData);
+      }
+    };
+    fetchServices();
   }, [hotels]);
 
-  // Chargement des réservations liées aux offres et services de l'hôtel
+  // Lorsque les offres ou services sont chargés, on recharge les réservations
   useEffect(() => {
-    if (offers.length > 0 || services.length > 0) {
-      const fetchReservations = async () => {
-        const { data: reservationsData, error: reservationsError } = await supabase
-          .from("reservations")
-          .select("*")
-          .in("reservation_type", ["hotel_offer", "hotel_service"]);
-        if (reservationsError) {
-          console.error("Erreur chargement réservations :", reservationsError);
-        } else {
-          const offerIds = offers.map(o => o.hotel_offer_id);
-          const serviceIds = services.map(s => s.hotel_service_id);
-          const filteredReservations = reservationsData.filter(r => {
-            if (r.reservation_type === "hotel_offer") {
-              return offerIds.includes(r.reservation_type_id);
-            } else if (r.reservation_type === "hotel_service") {
-              return serviceIds.includes(r.reservation_type_id);
-            }
-            return false;
-          });
-          setReservations(filteredReservations);
-        }
-      };
-      fetchReservations();
-    } else {
-      setReservations([]);
-    }
+    loadReservations();
   }, [offers, services]);
 
-  // Modification d'une réservation
-  const handleReservationSubmit = async (reservationData) => {
-    if (editingReservation) {
-      const { data, error } = await supabase
-        .from("reservations")
-        .update(reservationData)
-        .eq("reservation_id", reservationData.reservation_id)
-        .single();
-      if (error) {
-        console.error("Erreur lors de la mise à jour de la réservation", error);
-        return;
-      }
-      setReservations(
-        reservations.map(r =>
-          r.reservation_id === reservationData.reservation_id ? data : r
-        )
-      );
-    }
-    setIsReservationPopupOpen(false);
-  };
-
-  const deleteReservation = async (id) => {
-    const { error } = await supabase
+  // Mise à jour du statut de la réservation via le dropdown
+  const updateReservationStatus = async (reservation_id, newStatus) => {
+    const { data, error } = await supabase
       .from("reservations")
-      .delete()
-      .eq("reservation_id", id);
+      .update({ status: newStatus })
+      .eq("reservation_id", reservation_id)
+      .select() // Retourner la ligne mise à jour
+      .single();
     if (error) {
-      console.error("Erreur lors de la suppression de la réservation", error);
+      console.error("Erreur lors de la mise à jour du statut", error);
+      setPopupMessage("Erreur lors de la mise à jour du statut");
+      setShowPopup(true);
       return;
     }
-    setReservations(reservations.filter(r => r.reservation_id !== id));
+    // Rechargez l'ensemble des réservations pour inclure le join avec user
+    loadReservations();
+  };
+
+  // Mise à jour du paiement via le dropdown
+  const updatePaymentStatus = async (reservation_id, newPaymentStatus) => {
+    const { data, error } = await supabase
+      .from("reservations")
+      .update({ payment_status: newPaymentStatus })
+      .eq("reservation_id", reservation_id)
+      .select()
+      .single();
+    if (error) {
+      console.error("Erreur lors de la mise à jour du paiement", error);
+      setPopupMessage("Erreur lors de la mise à jour du paiement");
+      setShowPopup(true);
+      return;
+    }
+    loadReservations();
   };
 
   if (loading) {
-    return <div>Chargement...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-3xl font-bold text-indigo-600">
+        Chargement...
+      </div>
+    );
   }
 
   return (
     <div>
       <HeaderAdminH />
-      <div className="container mx-auto p-6 min-h-screen bg-amber-50">
-        <h2 className="text-2xl font-semibold text-amber-800 mb-6">
-          Tableau de bord
+      <div className="container mx-auto p-8 bg-gradient-to-r from-indigo-100 to-purple-100 min-h-screen">
+        <h2 className="text-4xl font-extrabold text-gray-800 mb-8 text-center">
+          Tableau de Bord
         </h2>
-        <div className="bg-white p-6 rounded-2xl shadow-xl mb-8">
-          <h3 className="text-xl font-semibold text-amber-800 mb-4">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl mb-10">
+          <h3 className="text-2xl font-bold text-indigo-700 mb-6">
             Gestion des Réservations (Offres & Services)
           </h3>
           <div className="overflow-x-auto">
-            <table className="w-full bg-amber-100 rounded-xl overflow-hidden">
-              <thead className="bg-gray-800 text-white">
+            <table className="w-full min-w-max bg-white rounded-xl shadow-lg">
+              <thead className="bg-gradient-to-r from-gray-800 to-gray-900 text-white">
                 <tr>
-                  <th className="px-4 py-2">ID</th>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">User ID</th>
-                  <th className="px-4 py-2">ID Type</th>
-                  <th className="px-4 py-2"># Pers.</th>
-                  <th className="px-4 py-2">Payement</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Demande</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-6 py-4 text-left font-semibold">Utilisateur</th>
+                  <th className="px-6 py-4 text-left font-semibold">Téléphone</th>
+                  <th className="px-6 py-4 text-left font-semibold">Type de Réservation</th>
+                  <th className="px-6 py-4 text-left font-semibold">Réservation</th>
+                  <th className="px-6 py-4 text-left font-semibold">Durée</th>
+                  <th className="px-6 py-4 text-left font-semibold">Date</th>
+                  <th className="px-6 py-4 text-left font-semibold">Paiement</th>
+                  <th className="px-6 py-4 text-left font-semibold">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-300">
-                {reservations.map((reservation) => (
-                  <tr key={reservation.reservation_id} className="hover:bg-amber-200">
-                    <td className="px-4 py-2 text-sm">{reservation.reservation_id}</td>
-                    <td className="px-4 py-2 text-sm">{reservation.reservation_type}</td>
-                    <td className="px-4 py-2 text-sm">{reservation.booking_date}</td>
-                    <td className="px-4 py-2 text-sm">{reservation.user_id}</td>
-                    <td className="px-4 py-2 text-sm">{reservation.reservation_type_id}</td>
-                    <td className="px-4 py-2 text-sm">{reservation.number_of_people}</td>
-                    <td className="px-4 py-2 text-sm">{reservation.payment_status}</td>
-                    <td className="px-4 py-2 text-sm">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs ${
-                          reservation.status === "confirmed"
-                            ? "bg-green-500 text-white"
-                            : reservation.status === "pending"
-                            ? "bg-yellow-500 text-white"
-                            : "bg-red-500 text-white"
-                        }`}
-                      >
-                        {reservation.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-sm">{reservation.special_request}</td>
-                    <td className="px-4 py-2 text-sm space-x-2">
-                      <button
-                        onClick={() => {
-                          setEditingReservation(reservation);
-                          setIsReservationPopupOpen(true);
-                        }}
-                        className="border border-amber-500 text-amber-500 px-2 py-1 rounded hover:bg-amber-500 hover:text-white"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        onClick={() => deleteReservation(reservation.reservation_id)}
-                        className="border border-amber-500 text-amber-500 px-2 py-1 rounded hover:bg-amber-500 hover:text-white"
-                      >
-                        🗑
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {reservations
+                  .filter((reservation) => reservation != null)
+                  .map((reservation) => {
+                    const reservedItem =
+                      reservation.reservation_type === "hotel_offer"
+                        ? offers.find(
+                            (o) => o.hotel_offer_id === reservation.reservation_type_id
+                          )
+                        : services.find(
+                            (s) => s.hotel_service_id === reservation.reservation_type_id
+                          );
+                    const reservedItemName = reservedItem ? reservedItem.name : "N/A";
+                    const userName = reservation.user
+                      ? `${reservation.user.first_name} ${reservation.user.last_name}`
+                      : "N/A";
+                    const userPhone = reservation.user ? reservation.user.phone_number : "N/A";
+
+                    return (
+                      <tr key={reservation.reservation_id} className="hover:bg-indigo-50 transition duration-300">
+                        <td className="px-6 py-4 text-gray-800">{userName}</td>
+                        <td className="px-6 py-4 text-gray-800">{userPhone}</td>
+                        <td className="px-6 py-4 text-gray-800">
+                          {reservation.reservation_type === "hotel_offer" ? "Offre Hôtel" : "Service Hôtel"}
+                        </td>
+                        <td className="px-6 py-4 text-gray-800">{reservedItemName}</td>
+                        <td className="px-6 py-4 text-gray-800">{reservation.duration} jour(s)</td>
+                        <td className="px-6 py-4 text-gray-800">
+                          {reservation.booking_date
+                            ? new Date(reservation.booking_date).toLocaleString()
+                            : "N/A"}
+                        </td>
+                        <td className="px-6 py-4 text-gray-800">
+                          <select
+                            value={reservation.payment_status}
+                            onChange={(e) =>
+                              updatePaymentStatus(reservation.reservation_id, e.target.value)
+                            }
+                            className="p-2 border border-gray-300 rounded-full shadow-sm hover:shadow-lg transition duration-300 bg-white text-gray-700"
+                          >
+                            <option value="pending">En attente</option>
+                            <option value="paid">Payé</option>
+                            <option value="failed">Échoué</option>
+                            <option value="refunded">Remboursé</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-4 text-gray-800">
+                          <select
+                            value={reservation.status}
+                            onChange={(e) =>
+                              updateReservationStatus(reservation.reservation_id, e.target.value)
+                            }
+                            className="p-2 border border-gray-300 rounded-full shadow-sm hover:shadow-lg transition duration-300 bg-white text-gray-700"
+                          >
+                            <option value="pending">En attente</option>
+                            <option value="confirmed">Confirmé</option>
+                            <option value="canceled">Annulé</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
         </div>
-        {isReservationPopupOpen && (
-          <ReservationFormModal
-            reservation={editingReservation}
-            onClose={() => setIsReservationPopupOpen(false)}
-            onSubmit={handleReservationSubmit}
-            offers={offers}
-            services={services}
-            defaultUserId={user.id}
-          />
+        {showPopup && (
+          <PopupMessage message={popupMessage} onClose={() => setShowPopup(false)} />
         )}
-        {showPopup && <PopupMessage message={popupMessage} onClose={() => setShowPopup(false)} />}
       </div>
       <Footer />
-    </div>
-  );
-};
-
-const ReservationFormModal = ({ reservation, onClose, onSubmit, offers, services, defaultUserId }) => {
-  const [formData, setFormData] = useState(
-    reservation || {
-      user_id: defaultUserId || "",
-      reservation_type: "hotel_offer",
-      reservation_type_id: "",
-      booking_date: new Date().toISOString().slice(0, 16),
-      number_of_people: 1,
-      special_request: "",
-      payment_status: "pending",
-      status: "pending",
-    }
-  );
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "reservation_type") {
-      setFormData({ ...formData, [name]: value, reservation_type_id: "" });
-    } else {
-      setFormData({ ...formData, [name]: value });
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  // Selon le type de réservation, les options proviennent des offres ou services
-  const typeOptions = formData.reservation_type === "hotel_offer" ? offers : services;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-8 w-full max-w-lg md:max-w-3xl max-h-[90vh] overflow-y-auto">
-        <h3 className="text-2xl font-bold text-amber-900 mb-6">
-          {reservation ? "Modifier la réservation" : "Nouvelle réservation"}
-        </h3>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                Utilisateur ID
-              </label>
-              <input
-                type="text"
-                name="user_id"
-                value={formData.user_id}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                Type de réservation
-              </label>
-              <select
-                name="reservation_type"
-                value={formData.reservation_type}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              >
-                <option value="hotel_offer">Offre hôtel</option>
-                <option value="hotel_service">Service hôtel</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                ID du type de réservation
-              </label>
-              <select
-                name="reservation_type_id"
-                value={formData.reservation_type_id}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              >
-                <option value="">Sélectionnez</option>
-                {typeOptions.map((item) => (
-                  <option
-                    key={item.hotel_offer_id || item.hotel_service_id}
-                    value={item.hotel_offer_id || item.hotel_service_id}
-                  >
-                    {item.name || item.title || item.service_type}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                Date de réservation
-              </label>
-              <input
-                type="datetime-local"
-                name="booking_date"
-                value={formData.booking_date}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                Nombre de personnes
-              </label>
-              <input
-                type="number"
-                name="number_of_people"
-                value={formData.number_of_people}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                Statut du paiement
-              </label>
-              <select
-                name="payment_status"
-                value={formData.payment_status}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              >
-                <option value="pending">En attente</option>
-                <option value="paid">Payé</option>
-                <option value="failed">Échoué</option>
-                <option value="refunded">Remboursé</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-amber-800 mb-2">
-                Statut de la réservation
-              </label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                className="w-full p-2 border border-amber-300 rounded-lg"
-                required
-              >
-                <option value="pending">En attente</option>
-                <option value="confirmed">Confirmé</option>
-                <option value="canceled">Annulé</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-amber-800 mb-2">
-              Demande spéciale
-            </label>
-            <textarea
-              name="special_request"
-              value={formData.special_request}
-              onChange={handleChange}
-              className="w-full p-2 border border-amber-300 rounded-lg"
-            />
-          </div>
-          <div className="flex justify-end gap-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="bg-transparent border-2 border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-white px-4 py-2 rounded-lg"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="bg-transparent border-2 border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-white px-4 py-2 rounded-lg"
-            >
-              {reservation ? "Mettre à jour" : "Créer"}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 };

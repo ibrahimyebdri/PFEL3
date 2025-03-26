@@ -95,18 +95,18 @@ const HeaderAdminH = () => {
             </li>
             <li>
               <Link
-                href="/gestionH"
+                href="/AdminH/gestionH"
                 className="block py-2 px-3 md:p-0 text-white hover:text-gray-100 dark:text-white transition-colors duration-200"
               >
-                Gérer Mes Offres
+                Gérer Mon Hôtel
               </Link>
             </li>
             <li>
               <Link
-                href="/gestionH"
+                href="/profile"
                 className="block py-2 px-3 md:p-0 text-white hover:text-gray-100 dark:text-white transition-colors duration-200"
               >
-                Mon Hôtel
+                My Profile
               </Link>
             </li>
             {/* Déconnecter Button in the mobile menu */}
